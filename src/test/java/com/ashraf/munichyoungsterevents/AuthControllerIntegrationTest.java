@@ -1,0 +1,92 @@
+package com.ashraf.munichyoungsterevents;
+
+import com.ashraf.munichyoungsterevents.repository.AttendeeRepository;
+import com.ashraf.munichyoungsterevents.repository.BookingRepository;
+import com.ashraf.munichyoungsterevents.repository.EventRepository;
+import com.ashraf.munichyoungsterevents.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest(properties = "app.booking.pending-expiration-check-ms=3600000")
+@AutoConfigureMockMvc
+class AuthControllerIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void cleanDatabase() {
+        jdbcTemplate.execute("TRUNCATE TABLE bookings, attendees, users, events RESTART IDENTITY CASCADE");
+    }
+
+    @Test
+    void registerLoginMeAndLogoutFlowWorksEndToEnd() throws Exception {
+        String email = "auth-flow-" + System.nanoTime() + "@example.com";
+        String password = "password123";
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("Ash", "Tester", email, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.role").value("ATTENDEE"))
+                .andExpect(jsonPath("$.userId").isNotEmpty())
+                .andExpect(jsonPath("$.attendeeId").isNotEmpty());
+
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email))
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.role").value("ATTENDEE"));
+
+        mockMvc.perform(post("/api/auth/logout").session(session))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private String registerJson(String firstName, String lastName, String email, String password) {
+        return """
+                {
+                  "firstName": "%s",
+                  "lastName": "%s",
+                  "email": "%s",
+                  "password": "%s"
+                }
+                """.formatted(firstName, lastName, email, password);
+    }
+
+    private String loginJson(String email, String password) {
+        return """
+                {
+                  "email": "%s",
+                  "password": "%s"
+                }
+                """.formatted(email, password);
+    }
+}

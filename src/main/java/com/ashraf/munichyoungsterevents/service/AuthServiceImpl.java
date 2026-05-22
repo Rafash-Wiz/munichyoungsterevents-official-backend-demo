@@ -3,12 +3,10 @@ package com.ashraf.munichyoungsterevents.service;
 import com.ashraf.munichyoungsterevents.dto.AuthLoginRequestDTO;
 import com.ashraf.munichyoungsterevents.dto.AuthRegisterRequestDTO;
 import com.ashraf.munichyoungsterevents.dto.AuthResponseDTO;
-import com.ashraf.munichyoungsterevents.entity.Attendee;
 import com.ashraf.munichyoungsterevents.entity.Role;
 import com.ashraf.munichyoungsterevents.entity.User;
 import com.ashraf.munichyoungsterevents.exception.ConflictException;
 import com.ashraf.munichyoungsterevents.exception.NotFoundException;
-import com.ashraf.munichyoungsterevents.repository.AttendeeRepository;
 import com.ashraf.munichyoungsterevents.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -26,13 +24,11 @@ import org.springframework.stereotype.Service;
 public class AuthServiceImpl implements AuthService{
 
     private final UserRepository userRepository;
-    private final AttendeeRepository attendeeRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
 
-    public AuthServiceImpl(UserRepository userRepository, AttendeeRepository attendeeRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager) {
+    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager) {
         this.userRepository = userRepository;
-        this.attendeeRepository = attendeeRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
     }
@@ -43,25 +39,15 @@ public class AuthServiceImpl implements AuthService{
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new ConflictException("Email already registered");
         }
-        if (attendeeRepository.existsByEmail(request.getEmail())) {
-            throw new ConflictException("Attendee email already exists");
-        }
 
         User user = new User();
         user.setEmail(request.getEmail());
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRole(Role.ATTENDEE);
         user.setEnabled(true);
         User savedUser = userRepository.save(user);
-
-        // Registration creates an attendee profile linked to the newly created account.
-        Attendee attendee = new Attendee();
-        attendee.setFirstName(request.getFirstName());
-        attendee.setLastName(request.getLastName());
-        attendee.setEmail(request.getEmail());
-        attendee.setUser(savedUser);
-        Attendee savedAttendee = attendeeRepository.save(attendee);
-        savedUser.setAttendee(savedAttendee);
 
         return toResponse(savedUser);
     }
@@ -96,16 +82,12 @@ public class AuthServiceImpl implements AuthService{
     }
 
     private AuthResponseDTO toResponse(User user) {
-        String firstName = user.getAttendee() != null ? user.getAttendee().getFirstName() : null;
-        String lastName = user.getAttendee() != null ? user.getAttendee().getLastName() : null;
-        Long attendeeId = user.getAttendee() != null ? user.getAttendee().getId() : null;
         return new AuthResponseDTO(
                 user.getId(),
-                attendeeId,
                 user.getEmail(),
                 user.getRole(),
-                firstName,
-                lastName
+                user.getFirstName(),
+                user.getLastName()
         );
     }
 

@@ -33,9 +33,9 @@ public class Booking {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "attendee_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false)
     @NotNull
-    private Attendee attendee;
+    private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id", nullable = false)
@@ -50,6 +50,16 @@ public class Booking {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BookingStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 40)
+    private BookingCancellationReason cancellationReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private BookingStatus cancelledFromStatus;
+
+    private LocalDateTime cancelledAt;
 
     @NotNull
     @DecimalMin(value = "0.0", inclusive = true)

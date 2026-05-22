@@ -31,6 +31,8 @@ public class AdminBootstrapConfig {
 
             User adminUser = new User();
             adminUser.setEmail(adminEmail);
+            adminUser.setFirstName("Admin");
+            adminUser.setLastName("User");
             adminUser.setPasswordHash(passwordEncoder.encode(adminPassword));
             adminUser.setRole(Role.ADMIN);
             adminUser.setEnabled(true);

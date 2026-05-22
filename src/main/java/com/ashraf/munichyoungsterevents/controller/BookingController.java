@@ -1,10 +1,13 @@
 package com.ashraf.munichyoungsterevents.controller;
 
 import com.ashraf.munichyoungsterevents.dto.BookingDTO;
+import com.ashraf.munichyoungsterevents.dto.PageResponseDTO;
 import com.ashraf.munichyoungsterevents.entity.BookingStatus;
 import com.ashraf.munichyoungsterevents.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,8 +18,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -32,19 +33,19 @@ public class BookingController {
     }
 
     @GetMapping
-    public ResponseEntity<List<BookingDTO>> getAllBookings(
-            @RequestParam(required = false) Long attendeeId,
-            @RequestParam(required = false) BookingStatus status) {
-        return ResponseEntity.ok(bookingService.getAllBookings(attendeeId, status));
+    public ResponseEntity<PageResponseDTO<BookingDTO>> getAllBookings(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Long eventId,
+            @RequestParam(required = false) BookingStatus status,
+            Pageable pageable) {
+        Page<BookingDTO> bookingPage = bookingService.getAllBookings(userId, eventId, status, pageable);
+        return ResponseEntity.ok(PageResponseDTO.from(bookingPage));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<List<BookingDTO>> getMyBookings(
-            @RequestParam(required = false) BookingStatus status) {
-        if (status != null) {
-            return ResponseEntity.ok(bookingService.getMyBookings(status));
-        }
-        return ResponseEntity.ok(bookingService.getMyBookings());
+    public ResponseEntity<PageResponseDTO<BookingDTO>> getMyBookings(Pageable pageable) {
+        Page<BookingDTO> bookingPage = bookingService.getMyBookings(pageable);
+        return ResponseEntity.ok(PageResponseDTO.from(bookingPage));
     }
 
     @GetMapping("/me/pending/{eventId}")

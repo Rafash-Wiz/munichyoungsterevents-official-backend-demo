@@ -1,5 +1,6 @@
 package com.ashraf.munichyoungsterevents.dto;
 
+import com.ashraf.munichyoungsterevents.entity.BookingCancellationReason;
 import com.ashraf.munichyoungsterevents.entity.BookingStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -18,8 +19,7 @@ public class BookingDTO {
 
     private Long id;
 
-    @NotNull
-    private Long attendeeId;
+    private Long userId;
 
     @NotNull
     private Long eventId;
@@ -32,4 +32,7 @@ public class BookingDTO {
     private LocalDateTime bookedAt;
     private BookingStatus status;
     private BigDecimal priceAtBooking;
+    private BookingCancellationReason cancellationReason;
+    private BookingStatus cancelledFromStatus;
+    private LocalDateTime cancelledAt;
 }

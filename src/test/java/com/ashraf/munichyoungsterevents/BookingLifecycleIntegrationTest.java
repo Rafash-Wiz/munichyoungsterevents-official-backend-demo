@@ -1,14 +1,12 @@
 package com.ashraf.munichyoungsterevents;
 
 import com.ashraf.munichyoungsterevents.dto.BookingDTO;
-import com.ashraf.munichyoungsterevents.entity.Attendee;
 import com.ashraf.munichyoungsterevents.entity.BookingStatus;
 import com.ashraf.munichyoungsterevents.entity.Event;
 import com.ashraf.munichyoungsterevents.entity.EventStatus;
 import com.ashraf.munichyoungsterevents.entity.Role;
 import com.ashraf.munichyoungsterevents.entity.User;
 import com.ashraf.munichyoungsterevents.exception.ConflictException;
-import com.ashraf.munichyoungsterevents.repository.AttendeeRepository;
 import com.ashraf.munichyoungsterevents.repository.EventRepository;
 import com.ashraf.munichyoungsterevents.repository.UserRepository;
 import com.ashraf.munichyoungsterevents.service.BookingService;
@@ -17,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest(properties = "app.booking.pending-expiration-check-ms=3600000")
+@ActiveProfiles("test")
 class BookingLifecycleIntegrationTest {
 
     @Autowired
@@ -35,17 +35,14 @@ class BookingLifecycleIntegrationTest {
     private EventRepository eventRepository;
 
     @Autowired
-    private AttendeeRepository attendeeRepository;
-
-    @Autowired
     private UserRepository userRepository;
 
     @Test
     void cannotConfirmCancelledBooking() {
         Event event = createEvent(2);
-        Attendee attendee = createAttendee("cancel-then-confirm");
+        User attendee = createAttendeeUser("cancel-then-confirm");
 
-        authenticate(attendee.getUser().getEmail());
+        authenticate(attendee.getEmail());
         BookingDTO booking = bookingService.createBooking(bookingRequest(attendee.getId(), event.getId()));
         bookingService.cancelBooking(booking.getId());
         SecurityContextHolder.clearContext();
@@ -56,24 +53,24 @@ class BookingLifecycleIntegrationTest {
     @Test
     void confirmedBookingKeepsCapacityUntilCancelledThenSlotIsFreed() {
         Event event = createEvent(1);
-        Attendee attendeeA = createAttendee("capacity-a");
-        Attendee attendeeB = createAttendee("capacity-b");
+        User attendeeA = createAttendeeUser("capacity-a");
+        User attendeeB = createAttendeeUser("capacity-b");
 
-        authenticate(attendeeA.getUser().getEmail());
+        authenticate(attendeeA.getEmail());
         BookingDTO bookingA = bookingService.createBooking(bookingRequest(attendeeA.getId(), event.getId()));
         bookingService.confirmBooking(bookingA.getId());
         SecurityContextHolder.clearContext();
 
-        authenticate(attendeeB.getUser().getEmail());
+        authenticate(attendeeB.getEmail());
         assertThrows(ConflictException.class,
                 () -> bookingService.createBooking(bookingRequest(attendeeB.getId(), event.getId())));
         SecurityContextHolder.clearContext();
 
-        authenticate(attendeeA.getUser().getEmail());
+        authenticate(attendeeA.getEmail());
         bookingService.cancelBooking(bookingA.getId());
         SecurityContextHolder.clearContext();
 
-        authenticate(attendeeB.getUser().getEmail());
+        authenticate(attendeeB.getEmail());
         BookingDTO bookingB = bookingService.createBooking(bookingRequest(attendeeB.getId(), event.getId()));
         SecurityContextHolder.clearContext();
         assertEquals(BookingStatus.PENDING, bookingB.getStatus());
@@ -85,9 +82,9 @@ class BookingLifecycleIntegrationTest {
         event.setStatus(EventStatus.COMING_SOON);
         eventRepository.save(event);
 
-        Attendee attendee = createAttendee("coming-soon");
+        User attendee = createAttendeeUser("coming-soon");
 
-        authenticate(attendee.getUser().getEmail());
+        authenticate(attendee.getEmail());
         assertThrows(ConflictException.class,
                 () -> bookingService.createBooking(bookingRequest(attendee.getId(), event.getId())));
         SecurityContextHolder.clearContext();
@@ -105,26 +102,14 @@ class BookingLifecycleIntegrationTest {
         return eventRepository.save(event);
     }
 
-    private Attendee createAttendee(String prefix) {
+    private User createAttendeeUser(String prefix) {
         String email = prefix + "-" + UUID.randomUUID() + "@example.com";
-        User user = new User(email, "hashed-password", Role.ATTENDEE, true);
-        User savedUser = userRepository.save(user);
-
-        Attendee attendee = new Attendee(
-                "First",
-                "Last",
-                email
-        );
-        attendee.setUser(savedUser);
-        Attendee savedAttendee = attendeeRepository.save(attendee);
-        savedUser.setAttendee(savedAttendee);
-        userRepository.save(savedUser);
-        return savedAttendee;
+        return userRepository.save(new User("First", "Last", email, "hashed-password", Role.ATTENDEE, true));
     }
 
-    private BookingDTO bookingRequest(Long attendeeId, Long eventId) {
+    private BookingDTO bookingRequest(Long userId, Long eventId) {
         BookingDTO bookingDTO = new BookingDTO();
-        bookingDTO.setAttendeeId(attendeeId);
+        bookingDTO.setUserId(userId);
         bookingDTO.setEventId(eventId);
         return bookingDTO;
     }

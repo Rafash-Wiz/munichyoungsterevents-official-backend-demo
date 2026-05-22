@@ -11,10 +11,15 @@ import java.util.List;
 public interface EventMapper {
 
     @Mapping(target = "availableSpots", ignore = true)
+    @Mapping(target = "bookedCount", ignore = true)
+    @Mapping(target = "confirmedCount", ignore = true)
+    @Mapping(target = "pendingCount", ignore = true)
+    @Mapping(target = "cancelledConfirmedCount", ignore = true)
     EventDTO toDTO(Event event);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "bookings", ignore = true)
+    @Mapping(target = "cancelledAt", ignore = true)
     Event toEntity(EventDTO eventDTO);
 
     List<EventDTO> toDTOList(List<Event> events);

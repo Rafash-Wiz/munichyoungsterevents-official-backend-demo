@@ -1,9 +1,5 @@
 package com.ashraf.munichyoungsterevents;
 
-import com.ashraf.munichyoungsterevents.repository.AttendeeRepository;
-import com.ashraf.munichyoungsterevents.repository.BookingRepository;
-import com.ashraf.munichyoungsterevents.repository.EventRepository;
-import com.ashraf.munichyoungsterevents.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -22,6 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = "app.booking.pending-expiration-check-ms=3600000")
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class AuthControllerIntegrationTest {
 
     @Autowired
@@ -32,7 +30,7 @@ class AuthControllerIntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
-        jdbcTemplate.execute("TRUNCATE TABLE bookings, attendees, users, events RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE TABLE bookings, users, events RESTART IDENTITY CASCADE");
     }
 
     @Test
@@ -46,8 +44,9 @@ class AuthControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(email))
                 .andExpect(jsonPath("$.role").value("ATTENDEE"))
-                .andExpect(jsonPath("$.userId").isNotEmpty())
-                .andExpect(jsonPath("$.attendeeId").isNotEmpty());
+                .andExpect(jsonPath("$.firstName").value("Ash"))
+                .andExpect(jsonPath("$.lastName").value("Tester"))
+                .andExpect(jsonPath("$.userId").isNotEmpty());
 
         MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

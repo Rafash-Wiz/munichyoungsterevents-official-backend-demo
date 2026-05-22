@@ -1,5 +1,6 @@
 package com.ashraf.munichyoungsterevents.dto;
 
+import com.ashraf.munichyoungsterevents.entity.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
@@ -11,7 +12,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class AttendeeDTO {
+public class UserDTO {
 
     private Long id;
 
@@ -24,4 +25,7 @@ public class AttendeeDTO {
     @NotBlank
     @Email
     private String email;
+
+    private Role role;
+    private Boolean enabled;
 }

@@ -71,6 +71,8 @@ public class Event {
     @Column(nullable = false, length = 30)
     private EventStatus status = EventStatus.OPEN;
 
+    private LocalDateTime cancelledAt;
+
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Booking> bookings = new ArrayList<>();
 

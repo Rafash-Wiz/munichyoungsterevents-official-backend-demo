@@ -6,10 +6,11 @@ import com.ashraf.munichyoungsterevents.exception.BadRequestException;
 import com.ashraf.munichyoungsterevents.exception.ConflictException;
 import com.ashraf.munichyoungsterevents.exception.NotFoundException;
 import com.ashraf.munichyoungsterevents.mapper.BookingMapper;
-import com.ashraf.munichyoungsterevents.repository.AttendeeRepository;
 import com.ashraf.munichyoungsterevents.repository.BookingRepository;
 import com.ashraf.munichyoungsterevents.repository.EventRepository;
 import com.ashraf.munichyoungsterevents.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import jakarta.transaction.Transactional;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,20 +26,17 @@ import java.util.List;
 @Transactional
 public class BookingServiceImpl implements BookingService {
 
-    private final AttendeeRepository attendeeRepository;
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
     private final EventRepository eventRepository;
     private final JdbcTemplate jdbcTemplate;
     private final UserRepository userRepository;
 
-    // User = security identity.
-    // Attendee = booking owner in the domain.
+    // User = both security identity and booking owner in the domain.
 
-    public BookingServiceImpl(AttendeeRepository attendeeRepository, BookingRepository bookingRepository,
+    public BookingServiceImpl(BookingRepository bookingRepository,
                               BookingMapper bookingMapper, EventRepository eventRepository,
                               JdbcTemplate jdbcTemplate, UserRepository userRepository) {
-        this.attendeeRepository = attendeeRepository;
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.eventRepository = eventRepository;
@@ -49,10 +47,7 @@ public class BookingServiceImpl implements BookingService {
     @Override
     public BookingDTO createBooking(BookingDTO bookingDTO) {
         validateBookingRequest(bookingDTO);
-
-//        Attendee attendee = attendeeRepository.findById(bookingDTO.getAttendeeId())
-//                .orElseThrow(() -> new NotFoundException("Attendee not found with id: " + bookingDTO.getAttendeeId()));
-        Attendee attendee = resolveBookingAttendee(bookingDTO);
+        User bookingUser = resolveBookingUser(bookingDTO);
 
         jdbcTemplate.execute("SET LOCAL lock_timeout = '3s'");
 
@@ -63,9 +58,9 @@ public class BookingServiceImpl implements BookingService {
             throw new ConflictException("Booking is not available for this event yet");
         }
 
-        if (bookingRepository.existsByAttendeeIdAndEventIdAndStatusNot(
-                attendee.getId(), event.getId(), BookingStatus.CANCELLED)) {
-            throw new ConflictException("Active booking already exists for this attendee and event");
+        if (bookingRepository.existsByUserIdAndEventIdAndStatusNot(
+                bookingUser.getId(), event.getId(), BookingStatus.CANCELLED)) {
+            throw new ConflictException("Active booking already exists for this user and event");
         }
 
         long activeBookings = bookingRepository.countByEventIdAndStatusNot(event.getId(), BookingStatus.CANCELLED);
@@ -74,7 +69,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         Booking booking = new Booking();
-        booking.setAttendee(attendee);
+        booking.setUser(bookingUser);
         booking.setEvent(event);
         booking.setStatus(BookingStatus.PENDING);
         booking.setBookedAt(LocalDateTime.now());
@@ -83,32 +78,49 @@ public class BookingServiceImpl implements BookingService {
         try {
             return bookingMapper.toDTO(bookingRepository.saveAndFlush(booking));
         } catch (DataIntegrityViolationException ex) {
-            throw new ConflictException("Active booking already exists for this attendee and event");
+            throw new ConflictException("Active booking already exists for this user and event");
         }
     }
 
     @Override
-    public List<BookingDTO> getAllBookings() {
-        return getAllBookings(null, null);
-    }
-
-    @Override
-    public List<BookingDTO> getAllBookings(Long attendeeId, BookingStatus status) {
-        if (attendeeId != null && status != null) {
-            return bookingMapper.toDTOList(
-                    bookingRepository.findByAttendeeIdAndStatusOrderByBookedAtDesc(attendeeId, status)
-            );
+    public Page<BookingDTO> getAllBookings(Long userId, Long eventId, BookingStatus status, Pageable pageable) {
+        if (userId != null && eventId != null && status != null) {
+            return bookingRepository.findByUserIdAndEventIdAndStatusOrderByBookedAtDescIdDesc(userId, eventId, status, pageable)
+                    .map(bookingMapper::toDTO);
         }
 
-        if (attendeeId != null) {
-            return bookingMapper.toDTOList(bookingRepository.findByAttendeeIdOrderByBookedAtDesc(attendeeId));
+        if (userId != null && eventId != null) {
+            return bookingRepository.findByUserIdAndEventIdOrderByBookedAtDescIdDesc(userId, eventId, pageable)
+                    .map(bookingMapper::toDTO);
+        }
+
+        if (userId != null && status != null) {
+            return bookingRepository.findByUserIdAndStatusOrderByBookedAtDescIdDesc(userId, status, pageable)
+                    .map(bookingMapper::toDTO);
+        }
+
+        if (eventId != null && status != null) {
+            return bookingRepository.findByEventIdAndStatusOrderByBookedAtDescIdDesc(eventId, status, pageable)
+                    .map(bookingMapper::toDTO);
+        }
+
+        if (userId != null) {
+            return bookingRepository.findByUserIdOrderByBookedAtDescIdDesc(userId, pageable)
+                    .map(bookingMapper::toDTO);
+        }
+
+        if (eventId != null) {
+            return bookingRepository.findByEventIdOrderByBookedAtDescIdDesc(eventId, pageable)
+                    .map(bookingMapper::toDTO);
         }
 
         if (status != null) {
-            return bookingMapper.toDTOList(bookingRepository.findByStatusOrderByBookedAtDesc(status));
+            return bookingRepository.findByStatusOrderByBookedAtDescIdDesc(status, pageable)
+                    .map(bookingMapper::toDTO);
         }
 
-        return bookingMapper.toDTOList(bookingRepository.findAllByOrderByBookedAtDesc());
+        return bookingRepository.findAllByOrderByBookedAtDescIdDesc(pageable)
+                .map(bookingMapper::toDTO);
     }
 
     @Override
@@ -121,12 +133,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public List<BookingDTO> getMyBookings() {
-        return getMyBookings(null);
-    }
-
-    @Override
-    public List<BookingDTO> getMyBookings(BookingStatus status) {
+    public Page<BookingDTO> getMyBookings(Pageable pageable) {
         User currentUser = getCurrentUserIfAuthenticated();
         if (currentUser == null) {
             throw new AccessDeniedException("Authentication is required");
@@ -137,20 +144,8 @@ public class BookingServiceImpl implements BookingService {
             throw new AccessDeniedException("Admins cannot use /api/bookings/me");
         }
 
-        if (currentUser.getAttendee() == null) {
-            throw new NotFoundException("No attendee profile is linked to the current user");
-        }
-
-        Long attendeeId = currentUser.getAttendee().getId();
-
-        // Optional status filter for attendee self view, still sorted newest first.
-        if (status != null) {
-            return bookingMapper.toDTOList(
-                    bookingRepository.findByAttendeeIdAndStatusOrderByBookedAtDesc(attendeeId, status)
-            );
-        }
-
-        return bookingMapper.toDTOList(bookingRepository.findByAttendeeIdOrderByBookedAtDesc(attendeeId));
+        return bookingRepository.findByUserIdOrderByBookedAtDescIdDesc(currentUser.getId(), pageable)
+                .map(bookingMapper::toDTO);
     }
 
     @Override
@@ -164,12 +159,8 @@ public class BookingServiceImpl implements BookingService {
             throw new AccessDeniedException("Admins cannot use attendee pending-booking lookup");
         }
 
-        if (currentUser.getAttendee() == null) {
-            throw new NotFoundException("No attendee profile is linked to the current user");
-        }
-
-        Booking booking = bookingRepository.findByAttendeeIdAndEventIdAndStatus(
-                        currentUser.getAttendee().getId(),
+        Booking booking = bookingRepository.findByUserIdAndEventIdAndStatus(
+                        currentUser.getId(),
                         eventId,
                         BookingStatus.PENDING
                 )
@@ -201,30 +192,26 @@ public class BookingServiceImpl implements BookingService {
             throw new ConflictException("Booking is already cancelled");
         }
 
+        User currentUser = getCurrentUserIfAuthenticated();
+
+        booking.setCancelledFromStatus(booking.getStatus());
+        booking.setCancelledAt(LocalDateTime.now());
+
+        if (currentUser != null && currentUser.getRole() == Role.ADMIN) {
+            booking.setCancellationReason(BookingCancellationReason.ADMIN_ACTION);
+        } else {
+            booking.setCancellationReason(BookingCancellationReason.USER_REQUEST);
+        }
+
         booking.setStatus(BookingStatus.CANCELLED);
         return bookingMapper.toDTO(bookingRepository.save(booking));
     }
 
     private void validateBookingRequest(BookingDTO bookingDTO) {
-        if (bookingDTO.getAttendeeId() == null) {
-            throw new BadRequestException("Attendee id is required");
-        }
-
         if (bookingDTO.getEventId() == null) {
             throw new BadRequestException("Event id is required");
         }
     }
-
-//    private void validateAttendeeOwnershipIfNeeded(Attendee attendee) {
-//        User currentUser = getCurrentUserIfAuthenticated();
-//        if (currentUser == null || currentUser.getRole() == Role.ADMIN) {
-//            return;
-//        }
-//
-//        if (currentUser.getAttendee() == null || !currentUser.getAttendee().getId().equals((attendee.getId()))) {
-//            throw new AccessDeniedException("You can only create bookings for your own attendee profile");
-//        }
-//    }
 
     private void validateBookingOwnershipIfNeeded(Booking booking) {
         User currentUser = getCurrentUserIfAuthenticated();
@@ -232,9 +219,7 @@ public class BookingServiceImpl implements BookingService {
             return;
         }
 
-        if (currentUser.getAttendee() == null
-                || booking.getAttendee() == null
-                || !currentUser.getAttendee().getId().equals(booking.getAttendee().getId())) {
+        if (booking.getUser() == null || !currentUser.getId().equals(booking.getUser().getId())) {
             throw new AccessDeniedException("You can only access your own bookings");
         }
     }
@@ -248,11 +233,11 @@ public class BookingServiceImpl implements BookingService {
         return userRepository.findByEmail(authentication.getName()).orElse(null);
     }
 
-    // Resolve the attendee for booking creation based on the authenticated user.
-    // Attendee users must book only for their own linked attendee profile, so we
-    // intentionally ignore any client-supplied attendeeId for them. Admin users
-    // may still create bookings on behalf of any attendee by using the request id.
-    private Attendee resolveBookingAttendee(BookingDTO bookingDTO) {
+    // Resolve the booking owner from the authenticated user.
+    // Attendee users must book only for themselves, so any client-supplied userId
+    // is ignored for them. Admin users may still create bookings on behalf of any
+    // attendee user by using the request userId.
+    private User resolveBookingUser(BookingDTO bookingDTO) {
         User currentUser = getCurrentUserIfAuthenticated();
 
         if (currentUser == null) {
@@ -260,14 +245,21 @@ public class BookingServiceImpl implements BookingService {
         }
 
         if (currentUser.getRole() == Role.ADMIN) {
-            return attendeeRepository.findById(bookingDTO.getAttendeeId())
-                    .orElseThrow(() -> new NotFoundException("Attendee not found with id: " + bookingDTO.getAttendeeId()));
+            if (bookingDTO.getUserId() == null) {
+                throw new BadRequestException("User id is required for admin-created bookings");
+            }
+            User targetUser = userRepository.findById(bookingDTO.getUserId())
+                    .orElseThrow(() -> new NotFoundException("User not found with id: " + bookingDTO.getUserId()));
+            if (targetUser.getRole() != Role.ATTENDEE) {
+                throw new ConflictException("Bookings can only be created for attendee users");
+            }
+            return targetUser;
         }
 
-        if (currentUser.getAttendee() == null) {
-            throw new NotFoundException("No attendee profile is linked to the current user");
+        if (currentUser.getRole() != Role.ATTENDEE) {
+            throw new AccessDeniedException("Only attendee users can create their own bookings");
         }
 
-        return currentUser.getAttendee();
+        return currentUser;
     }
 }

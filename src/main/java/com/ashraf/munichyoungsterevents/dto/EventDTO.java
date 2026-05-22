@@ -42,6 +42,14 @@ public class EventDTO {
 
     private Integer availableSpots;
 
+    private Integer bookedCount;
+
+    private Integer confirmedCount;
+
+    private Integer pendingCount;
+
+    private Integer cancelledConfirmedCount;
+
     @NotNull
     @DecimalMin(value = "0.0", inclusive = true)
     private BigDecimal price;

@@ -1,13 +1,11 @@
 package com.ashraf.munichyoungsterevents;
 
 import com.ashraf.munichyoungsterevents.dto.BookingDTO;
-import com.ashraf.munichyoungsterevents.entity.Attendee;
 import com.ashraf.munichyoungsterevents.entity.BookingStatus;
 import com.ashraf.munichyoungsterevents.entity.Event;
 import com.ashraf.munichyoungsterevents.entity.Role;
 import com.ashraf.munichyoungsterevents.entity.User;
 import com.ashraf.munichyoungsterevents.exception.ConflictException;
-import com.ashraf.munichyoungsterevents.repository.AttendeeRepository;
 import com.ashraf.munichyoungsterevents.repository.BookingRepository;
 import com.ashraf.munichyoungsterevents.repository.EventRepository;
 import com.ashraf.munichyoungsterevents.repository.UserRepository;
@@ -17,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -33,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 @SpringBootTest(properties = "app.booking.pending-expiration-check-ms=3600000")
+@ActiveProfiles("test")
 class BookingConcurrencyIntegrationTest {
 
     @Autowired
@@ -45,21 +45,18 @@ class BookingConcurrencyIntegrationTest {
     private EventRepository eventRepository;
 
     @Autowired
-    private AttendeeRepository attendeeRepository;
-
-    @Autowired
     private UserRepository userRepository;
 
     @Test
     void shouldAllowOnlyOneBookingWhenCapacityIsOneUnderConcurrentRequests() throws Exception {
         Event event = createEvent(1);
-        Attendee attendeeA = createAttendee("capacity-a");
-        Attendee attendeeB = createAttendee("capacity-b");
+        User attendeeA = createAttendeeUser("capacity-a");
+        User attendeeB = createAttendeeUser("capacity-b");
 
         List<AttemptResult> results = runConcurrently(
-                attendeeA.getUser().getEmail(),
+                attendeeA.getEmail(),
                 () -> bookingService.createBooking(bookingRequest(attendeeA.getId(), event.getId())),
-                attendeeB.getUser().getEmail(),
+                attendeeB.getEmail(),
                 () -> bookingService.createBooking(bookingRequest(attendeeB.getId(), event.getId()))
         );
 
@@ -70,14 +67,14 @@ class BookingConcurrencyIntegrationTest {
     }
 
     @Test
-    void shouldAllowOnlyOneActiveBookingForSameAttendeeAndEventUnderConcurrentRequests() throws Exception {
+    void shouldAllowOnlyOneActiveBookingForSameUserAndEventUnderConcurrentRequests() throws Exception {
         Event event = createEvent(5);
-        Attendee attendee = createAttendee("duplicate");
+        User attendee = createAttendeeUser("duplicate");
 
         List<AttemptResult> results = runConcurrently(
-                attendee.getUser().getEmail(),
+                attendee.getEmail(),
                 () -> bookingService.createBooking(bookingRequest(attendee.getId(), event.getId())),
-                attendee.getUser().getEmail(),
+                attendee.getEmail(),
                 () -> bookingService.createBooking(bookingRequest(attendee.getId(), event.getId()))
         );
 
@@ -99,26 +96,14 @@ class BookingConcurrencyIntegrationTest {
         return eventRepository.save(event);
     }
 
-    private Attendee createAttendee(String prefix) {
+    private User createAttendeeUser(String prefix) {
         String email = prefix + "-" + UUID.randomUUID() + "@example.com";
-        User user = new User(email, "hashed-password", Role.ATTENDEE, true);
-        User savedUser = userRepository.save(user);
-
-        Attendee attendee = new Attendee(
-                "First",
-                "Last",
-                email
-        );
-        attendee.setUser(savedUser);
-        Attendee savedAttendee = attendeeRepository.save(attendee);
-        savedUser.setAttendee(savedAttendee);
-        userRepository.save(savedUser);
-        return savedAttendee;
+        return userRepository.save(new User("First", "Last", email, "hashed-password", Role.ATTENDEE, true));
     }
 
-    private BookingDTO bookingRequest(Long attendeeId, Long eventId) {
+    private BookingDTO bookingRequest(Long userId, Long eventId) {
         BookingDTO bookingDTO = new BookingDTO();
-        bookingDTO.setAttendeeId(attendeeId);
+        bookingDTO.setUserId(userId);
         bookingDTO.setEventId(eventId);
         return bookingDTO;
     }

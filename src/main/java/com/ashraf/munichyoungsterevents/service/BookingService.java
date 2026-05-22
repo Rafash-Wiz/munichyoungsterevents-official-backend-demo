@@ -2,22 +2,18 @@ package com.ashraf.munichyoungsterevents.service;
 
 import com.ashraf.munichyoungsterevents.dto.BookingDTO;
 import com.ashraf.munichyoungsterevents.entity.BookingStatus;
-
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface BookingService {
 
     BookingDTO createBooking(BookingDTO bookingDTO);
 
-    List<BookingDTO> getAllBookings();
-
-    List<BookingDTO> getAllBookings(Long attendeeId, BookingStatus status);
+    Page<BookingDTO> getAllBookings(Long userId, Long eventId, BookingStatus status, Pageable pageable);
 
     BookingDTO getBookingById(Long id);
 
-    List<BookingDTO> getMyBookings();
-
-    List<BookingDTO> getMyBookings(BookingStatus status);
+    Page<BookingDTO> getMyBookings(Pageable pageable);
 
     BookingDTO getMyPendingBookingForEvent(Long eventId);
 

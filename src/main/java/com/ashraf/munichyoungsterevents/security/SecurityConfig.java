@@ -26,12 +26,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/events/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/events/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/events/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/events/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/events/**").permitAll()
-                        // Attendee CRUD is admin-only once auth registration is available.
-                        .requestMatchers(HttpMethod.GET, "/api/attendees/me").authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/attendees/me").authenticated()
-                        .requestMatchers("/api/attendees/**").hasRole("ADMIN")
+                        // User profile and user management.
+                        .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/users/me").authenticated()
+                        .requestMatchers("/api/users/**").hasRole("ADMIN")
                         // Booking lifecycle and visibility.
                         .requestMatchers(HttpMethod.GET, "/api/bookings").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/bookings/*/confirm").hasRole("ADMIN")

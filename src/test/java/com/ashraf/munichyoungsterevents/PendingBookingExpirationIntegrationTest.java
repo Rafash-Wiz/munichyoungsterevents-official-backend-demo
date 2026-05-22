@@ -1,13 +1,12 @@
 package com.ashraf.munichyoungsterevents;
 
 import com.ashraf.munichyoungsterevents.dto.BookingDTO;
-import com.ashraf.munichyoungsterevents.entity.Attendee;
 import com.ashraf.munichyoungsterevents.entity.Booking;
+import com.ashraf.munichyoungsterevents.entity.BookingCancellationReason;
 import com.ashraf.munichyoungsterevents.entity.BookingStatus;
 import com.ashraf.munichyoungsterevents.entity.Event;
 import com.ashraf.munichyoungsterevents.entity.Role;
 import com.ashraf.munichyoungsterevents.entity.User;
-import com.ashraf.munichyoungsterevents.repository.AttendeeRepository;
 import com.ashraf.munichyoungsterevents.repository.BookingRepository;
 import com.ashraf.munichyoungsterevents.repository.EventRepository;
 import com.ashraf.munichyoungsterevents.repository.UserRepository;
@@ -18,17 +17,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @SpringBootTest(properties = {
         "app.booking.pending-expiration-check-ms=3600000",
         "app.booking.pending-expiration-minutes=5"
 })
+@ActiveProfiles("test")
 class PendingBookingExpirationIntegrationTest {
 
     @Autowired
@@ -44,25 +46,22 @@ class PendingBookingExpirationIntegrationTest {
     private EventRepository eventRepository;
 
     @Autowired
-    private AttendeeRepository attendeeRepository;
-
-    @Autowired
     private UserRepository userRepository;
 
     @Test
     void shouldExpireOnlyPendingBookingsOlderThanConfiguredTtl() {
         Event event = createEvent(5);
-        Attendee attendeeA = createAttendee("expire-old");
-        Attendee attendeeB = createAttendee("keep-recent");
-        Attendee attendeeC = createAttendee("keep-confirmed");
+        User attendeeA = createAttendeeUser("expire-old");
+        User attendeeB = createAttendeeUser("keep-recent");
+        User attendeeC = createAttendeeUser("keep-confirmed");
 
-        authenticate(attendeeA.getUser().getEmail());
+        authenticate(attendeeA.getEmail());
         BookingDTO oldPending = bookingService.createBooking(bookingRequest(attendeeA.getId(), event.getId()));
         SecurityContextHolder.clearContext();
-        authenticate(attendeeB.getUser().getEmail());
+        authenticate(attendeeB.getEmail());
         BookingDTO recentPending = bookingService.createBooking(bookingRequest(attendeeB.getId(), event.getId()));
         SecurityContextHolder.clearContext();
-        authenticate(attendeeC.getUser().getEmail());
+        authenticate(attendeeC.getEmail());
         BookingDTO oldConfirmed = bookingService.createBooking(bookingRequest(attendeeC.getId(), event.getId()));
         bookingService.confirmBooking(oldConfirmed.getId());
         SecurityContextHolder.clearContext();
@@ -82,7 +81,11 @@ class PendingBookingExpirationIntegrationTest {
         int expiredCount = pendingBookingExpirationService.expireExpiredPendingBookings();
         assertEquals(1, expiredCount);
 
-        assertEquals(BookingStatus.CANCELLED, bookingRepository.findById(oldPending.getId()).orElseThrow().getStatus());
+        Booking expiredBooking = bookingRepository.findById(oldPending.getId()).orElseThrow();
+        assertEquals(BookingStatus.CANCELLED, expiredBooking.getStatus());
+        assertEquals(BookingStatus.PENDING, expiredBooking.getCancelledFromStatus());
+        assertEquals(BookingCancellationReason.EXPIRED, expiredBooking.getCancellationReason());
+        assertNotNull(expiredBooking.getCancelledAt());
         assertEquals(BookingStatus.PENDING, bookingRepository.findById(recentPending.getId()).orElseThrow().getStatus());
         assertEquals(BookingStatus.CONFIRMED, bookingRepository.findById(oldConfirmed.getId()).orElseThrow().getStatus());
     }
@@ -99,26 +102,14 @@ class PendingBookingExpirationIntegrationTest {
         return eventRepository.save(event);
     }
 
-    private Attendee createAttendee(String prefix) {
+    private User createAttendeeUser(String prefix) {
         String email = prefix + "-" + UUID.randomUUID() + "@example.com";
-        User user = new User(email, "hashed-password", Role.ATTENDEE, true);
-        User savedUser = userRepository.save(user);
-
-        Attendee attendee = new Attendee(
-                "First",
-                "Last",
-                email
-        );
-        attendee.setUser(savedUser);
-        Attendee savedAttendee = attendeeRepository.save(attendee);
-        savedUser.setAttendee(savedAttendee);
-        userRepository.save(savedUser);
-        return savedAttendee;
+        return userRepository.save(new User("First", "Last", email, "hashed-password", Role.ATTENDEE, true));
     }
 
-    private BookingDTO bookingRequest(Long attendeeId, Long eventId) {
+    private BookingDTO bookingRequest(Long userId, Long eventId) {
         BookingDTO bookingDTO = new BookingDTO();
-        bookingDTO.setAttendeeId(attendeeId);
+        bookingDTO.setUserId(userId);
         bookingDTO.setEventId(eventId);
         return bookingDTO;
     }

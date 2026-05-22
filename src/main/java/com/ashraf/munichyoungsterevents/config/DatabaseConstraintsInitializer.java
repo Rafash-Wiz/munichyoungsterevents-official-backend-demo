@@ -11,8 +11,8 @@ public class DatabaseConstraintsInitializer {
     @Bean
     public ApplicationRunner activeBookingUniqueIndexInitializer(JdbcTemplate jdbcTemplate) {
         return args -> jdbcTemplate.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_active_attendee_event
-                ON bookings (attendee_id, event_id)
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_active_user_event
+                ON bookings (user_id, event_id)
                 WHERE status <> 'CANCELLED'
                 """);
     }

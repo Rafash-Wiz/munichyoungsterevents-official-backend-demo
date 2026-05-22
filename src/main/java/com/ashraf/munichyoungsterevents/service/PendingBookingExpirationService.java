@@ -1,6 +1,7 @@
 package com.ashraf.munichyoungsterevents.service;
 
 import com.ashraf.munichyoungsterevents.entity.Booking;
+import com.ashraf.munichyoungsterevents.entity.BookingCancellationReason;
 import com.ashraf.munichyoungsterevents.entity.BookingStatus;
 import com.ashraf.munichyoungsterevents.repository.BookingRepository;
 import jakarta.transaction.Transactional;
@@ -38,7 +39,13 @@ public class PendingBookingExpirationService {
             return 0;
         }
 
-        expiredPending.forEach(booking -> booking.setStatus(BookingStatus.CANCELLED));
+        LocalDateTime cancelledAt = LocalDateTime.now();
+        expiredPending.forEach(booking -> {
+            booking.setCancelledFromStatus(booking.getStatus());
+            booking.setCancellationReason(BookingCancellationReason.EXPIRED);
+            booking.setCancelledAt(cancelledAt);
+            booking.setStatus(BookingStatus.CANCELLED);
+        });
         bookingRepository.saveAll(expiredPending);
         return expiredPending.size();
     }

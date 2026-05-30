@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.ashraf.munichyoungsterevents</groupId>
-	<artifactId>munichyoungsterevents-rebuild</artifactId>
+	<artifactId>munichyoungsterevents-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>munichyoungsterevents-rebuild</name>
-	<description>Spring Boot rebuild of the Munich Youngster Events backend</description>
+	<name>munichyoungsterevents-backend</name>
+	<description>Spring Boot backend for the Munich Youngster Events platform</description>
 	<properties>
 		<java.version>21</java.version>
 		<lombok.version>1.18.38</lombok.version>

@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -53,20 +52,36 @@ class AuthControllerIntegrationTest {
                         .content(loginJson(email, password)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.token").isNotEmpty())
                 .andReturn();
 
-        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        String token = readToken(loginResult);
 
-        mockMvc.perform(get("/api/auth/me").session(session))
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", bearerToken(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(email))
                 .andExpect(jsonPath("$.role").value("ATTENDEE"));
 
-        mockMvc.perform(post("/api/auth/logout").session(session))
+        mockMvc.perform(post("/api/auth/logout")
+                        .header("Authorization", bearerToken(token)))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/auth/me").session(session))
-                .andExpect(status().isUnauthorized());
+        // Current JWT logout is client-side only, so the same token remains valid
+        // until it expires or server-side revocation is added later.
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", bearerToken(token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email));
+    }
+
+    private String readToken(MvcResult result) throws Exception {
+        String body = result.getResponse().getContentAsString();
+        return body.replaceAll("(?s).*\"token\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+    }
+
+    private String bearerToken(String token) {
+        return "Bearer " + token;
     }
 
     private String registerJson(String firstName, String lastName, String email, String password) {

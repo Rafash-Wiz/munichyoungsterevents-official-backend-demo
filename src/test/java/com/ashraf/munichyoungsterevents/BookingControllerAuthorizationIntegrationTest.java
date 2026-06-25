@@ -15,7 +15,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -65,9 +64,9 @@ class BookingControllerAuthorizationIntegrationTest {
         User attendeeA = createAttendeeUser("booking-a-" + UUID.randomUUID() + "@example.com", "password123");
         User attendeeB = createAttendeeUser("booking-b-" + UUID.randomUUID() + "@example.com", "password123");
 
-        MockHttpSession attendeeASession = login(attendeeA.getEmail(), "password123");
+        String attendeeAToken = login(attendeeA.getEmail(), "password123");
         MvcResult bookingAResult = mockMvc.perform(post("/api/bookings")
-                        .session(attendeeASession)
+                        .header("Authorization", bearerToken(attendeeAToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bookingJson(attendeeA.getId(), event.getId())))
                 .andExpect(status().isCreated())
@@ -76,9 +75,9 @@ class BookingControllerAuthorizationIntegrationTest {
 
         String bookingAId = readId(bookingAResult);
 
-        MockHttpSession attendeeBSession = login(attendeeB.getEmail(), "password123");
+        String attendeeBToken = login(attendeeB.getEmail(), "password123");
         MvcResult bookingBResult = mockMvc.perform(post("/api/bookings")
-                        .session(attendeeBSession)
+                        .header("Authorization", bearerToken(attendeeBToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bookingJson(attendeeA.getId(), event.getId())))
                 .andExpect(status().isCreated())
@@ -87,7 +86,8 @@ class BookingControllerAuthorizationIntegrationTest {
 
         String bookingBId = readId(bookingBResult);
 
-        mockMvc.perform(get("/api/bookings/me").session(attendeeASession))
+        mockMvc.perform(get("/api/bookings/me")
+                        .header("Authorization", bearerToken(attendeeAToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(bookingAId))
                 .andExpect(jsonPath("$.content[0].userId").value(attendeeA.getId().toString()))
@@ -95,19 +95,22 @@ class BookingControllerAuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.content[0].eventLocation").value(event.getLocation()))
                 .andExpect(jsonPath("$.number").value(0));
 
-        mockMvc.perform(get("/api/bookings/me/pending/" + event.getId()).session(attendeeASession))
+        mockMvc.perform(get("/api/bookings/me/pending/" + event.getId())
+                        .header("Authorization", bearerToken(attendeeAToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(bookingAId))
                 .andExpect(jsonPath("$.eventId").value(event.getId().toString()))
                 .andExpect(jsonPath("$.eventTitle").value(event.getTitle()))
                 .andExpect(jsonPath("$.status").value("PENDING"));
 
-        mockMvc.perform(get("/api/bookings/me").session(attendeeBSession))
+        mockMvc.perform(get("/api/bookings/me")
+                        .header("Authorization", bearerToken(attendeeBToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(bookingBId))
                 .andExpect(jsonPath("$.content[0].userId").value(attendeeB.getId().toString()));
 
-        mockMvc.perform(get("/api/bookings/" + bookingAId).session(attendeeBSession))
+        mockMvc.perform(get("/api/bookings/" + bookingAId)
+                        .header("Authorization", bearerToken(attendeeBToken)))
                 .andExpect(status().isForbidden());
     }
 
@@ -118,44 +121,47 @@ class BookingControllerAuthorizationIntegrationTest {
         User attendee = createAttendeeUser("booking-owner-" + UUID.randomUUID() + "@example.com", "password123");
         createAdminUser("booking-admin-" + UUID.randomUUID() + "@example.com", "password123");
 
-        MockHttpSession attendeeSession = login(attendee.getEmail(), "password123");
+        String attendeeToken = login(attendee.getEmail(), "password123");
         MvcResult bookingResult = mockMvc.perform(post("/api/bookings")
-                        .session(attendeeSession)
+                        .header("Authorization", bearerToken(attendeeToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bookingJson(attendee.getId(), event.getId())))
                 .andExpect(status().isCreated())
                 .andReturn();
 
         mockMvc.perform(post("/api/bookings")
-                        .session(attendeeSession)
+                        .header("Authorization", bearerToken(attendeeToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bookingJson(attendee.getId(), secondEvent.getId())))
                 .andExpect(status().isCreated());
 
         String bookingId = readId(bookingResult);
 
-        mockMvc.perform(get("/api/bookings").session(attendeeSession))
+        mockMvc.perform(get("/api/bookings")
+                        .header("Authorization", bearerToken(attendeeToken)))
                 .andExpect(status().isForbidden());
 
-        MockHttpSession adminSession = login(userRepository.findAll().stream()
+        String adminToken = login(userRepository.findAll().stream()
                 .filter(user -> user.getRole() == Role.ADMIN)
                 .findFirst()
                 .orElseThrow()
                 .getEmail(), "password123");
 
-        mockMvc.perform(get("/api/bookings").session(adminSession))
+        mockMvc.perform(get("/api/bookings")
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.number").value(0));
 
         mockMvc.perform(get("/api/bookings")
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .param("eventId", event.getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(bookingId))
                 .andExpect(jsonPath("$.content[0].eventId").value(event.getId().toString()));
 
-        mockMvc.perform(patch("/api/bookings/" + bookingId + "/confirm").session(adminSession))
+        mockMvc.perform(patch("/api/bookings/" + bookingId + "/confirm")
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
     }
@@ -177,14 +183,14 @@ class BookingControllerAuthorizationIntegrationTest {
             bookingRepository.save(booking);
         }
 
-        MockHttpSession adminSession = login(userRepository.findAll().stream()
+        String adminToken = login(userRepository.findAll().stream()
                 .filter(user -> user.getRole() == Role.ADMIN)
                 .findFirst()
                 .orElseThrow()
                 .getEmail(), "password123");
 
         mockMvc.perform(get("/api/bookings")
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .param("eventId", event.getId().toString())
                         .param("status", "CONFIRMED")
                         .param("page", "0")
@@ -197,7 +203,7 @@ class BookingControllerAuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.totalPages").value(2));
 
         mockMvc.perform(get("/api/bookings")
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .param("eventId", event.getId().toString())
                         .param("status", "CONFIRMED")
                         .param("page", "1")
@@ -228,14 +234,23 @@ class BookingControllerAuthorizationIntegrationTest {
         userRepository.save(new User("Admin", "User", email, passwordEncoder.encode(password), Role.ADMIN, true));
     }
 
-    private MockHttpSession login(String email, String password) throws Exception {
+    private String login(String email, String password) throws Exception {
         MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginJson(email, password)))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        return (MockHttpSession) loginResult.getRequest().getSession(false);
+        return readToken(loginResult);
+    }
+
+    private String readToken(MvcResult result) throws Exception {
+        String body = result.getResponse().getContentAsString();
+        return body.replaceAll("(?s).*\"token\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+    }
+
+    private String bearerToken(String token) {
+        return "Bearer " + token;
     }
 
     private String readId(MvcResult result) throws Exception {

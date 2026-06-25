@@ -10,7 +10,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -53,10 +52,10 @@ class UserControllerAuthorizationIntegrationTest {
         String adminEmail = "admin-" + UUID.randomUUID() + "@example.com";
         createUser(adminEmail, "password123", Role.ADMIN, "Admin", "User");
 
-        MockHttpSession adminSession = login(adminEmail, "password123");
+        String adminToken = login(adminEmail, "password123");
 
         mockMvc.perform(get("/api/users")
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .param("role", "ATTENDEE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].role").value("ATTENDEE"))
@@ -73,10 +72,10 @@ class UserControllerAuthorizationIntegrationTest {
         createUser(adminEmail, "password123", Role.ADMIN, "Admin", "User");
 
         assertNotNull(targetUser.getId());
-        MockHttpSession adminSession = login(adminEmail, "password123");
+        String adminToken = login(adminEmail, "password123");
 
         mockMvc.perform(get("/api/users")
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .param("role", "ATTENDEE")
                         .param("id", targetUser.getId().toString()))
                 .andExpect(status().isOk())
@@ -85,7 +84,7 @@ class UserControllerAuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.content[0].firstName").value("Ash"));
 
         mockMvc.perform(get("/api/users")
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .param("role", "ATTENDEE")
                         .param("firstName", "as"))
                 .andExpect(status().isOk())
@@ -93,7 +92,7 @@ class UserControllerAuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.content[0].firstName").value("Ash"));
 
         mockMvc.perform(get("/api/users")
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .param("role", "ATTENDEE")
                         .param("lastName", "do"))
                 .andExpect(status().isOk())
@@ -105,14 +104,23 @@ class UserControllerAuthorizationIntegrationTest {
         return userRepository.save(new User(firstName, lastName, email, passwordEncoder.encode(password), role, true));
     }
 
-    private MockHttpSession login(String email, String password) throws Exception {
+    private String login(String email, String password) throws Exception {
         MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginJson(email, password)))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        return (MockHttpSession) loginResult.getRequest().getSession(false);
+        return readToken(loginResult);
+    }
+
+    private String readToken(MvcResult result) throws Exception {
+        String body = result.getResponse().getContentAsString();
+        return body.replaceAll("(?s).*\"token\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+    }
+
+    private String bearerToken(String token) {
+        return "Bearer " + token;
     }
 
     private String loginJson(String email, String password) {

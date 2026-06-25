@@ -8,16 +8,14 @@ import com.ashraf.munichyoungsterevents.entity.User;
 import com.ashraf.munichyoungsterevents.exception.ConflictException;
 import com.ashraf.munichyoungsterevents.exception.NotFoundException;
 import com.ashraf.munichyoungsterevents.repository.UserRepository;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import com.ashraf.munichyoungsterevents.security.CustomUserDetailsService;
+import com.ashraf.munichyoungsterevents.security.JwtService;
 import jakarta.transaction.Transactional;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -26,11 +24,19 @@ public class AuthServiceImpl implements AuthService{
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
+    private final CustomUserDetailsService customUserDetailsService;
 
-    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager) {
+    public AuthServiceImpl(UserRepository userRepository,
+                           PasswordEncoder passwordEncoder,
+                           AuthenticationManager authenticationManager,
+                           JwtService jwtService,
+                           CustomUserDetailsService customUserDetailsService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
+        this.jwtService = jwtService;
+        this.customUserDetailsService = customUserDetailsService;
     }
 
     @Override
@@ -49,28 +55,22 @@ public class AuthServiceImpl implements AuthService{
         user.setEnabled(true);
         User savedUser = userRepository.save(user);
 
-        return toResponse(savedUser);
+        return toResponse(savedUser, null);
     }
 
     @Override
-    public AuthResponseDTO login(AuthLoginRequestDTO request, HttpServletRequest httpRequest) {
+    public AuthResponseDTO login(AuthLoginRequestDTO request) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
 
-        // Persist the authenticated principal into the HTTP session so subsequent requests
-        // are authenticated via JSESSIONID without resending credentials.
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
-
-        HttpSession session = httpRequest.getSession(true);
-        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);
+        UserDetails userDetails = customUserDetailsService.loadUserByUsername(authentication.getName());
+        String token = jwtService.generateToken(userDetails);
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new NotFoundException("User not found after login"));
 
-        return toResponse(user);
+        return toResponse(user, token);
     }
 
     @Override
@@ -78,11 +78,12 @@ public class AuthServiceImpl implements AuthService{
         User user = userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new NotFoundException("Authenticated user not found"));
 
-        return toResponse(user);
+        return toResponse(user, null);
     }
 
-    private AuthResponseDTO toResponse(User user) {
+    private AuthResponseDTO toResponse(User user, String token) {
         return new AuthResponseDTO(
+                token,
                 user.getId(),
                 user.getEmail(),
                 user.getRole(),

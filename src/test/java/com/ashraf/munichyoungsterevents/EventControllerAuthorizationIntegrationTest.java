@@ -17,7 +17,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -95,16 +94,16 @@ class EventControllerAuthorizationIntegrationTest {
                         .content(eventJson(payload)))
                 .andExpect(status().isUnauthorized());
 
-        MockHttpSession attendeeSession = login(attendeeEmail, password);
+        String attendeeToken = login(attendeeEmail, password);
         mockMvc.perform(post("/api/events")
-                        .session(attendeeSession)
+                        .header("Authorization", bearerToken(attendeeToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(eventJson(payload)))
                 .andExpect(status().isForbidden());
 
-        MockHttpSession adminSession = login(adminEmail, password);
+        String adminToken = login(adminEmail, password);
         mockMvc.perform(post("/api/events")
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(eventJson(payload)))
                 .andExpect(status().isCreated())
@@ -132,7 +131,7 @@ class EventControllerAuthorizationIntegrationTest {
                 .getId();
 
         mockMvc.perform(put("/api/events/{id}", createdEventId)
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(eventJson(cancelledUpdatePayload)))
                 .andExpect(status().isConflict());
@@ -150,7 +149,7 @@ class EventControllerAuthorizationIntegrationTest {
         );
 
         mockMvc.perform(put("/api/events/{id}", createdEventId)
-                        .session(adminSession)
+                        .header("Authorization", bearerToken(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(eventJson(comingSoonUpdatePayload)))
                 .andExpect(status().isConflict());
@@ -282,14 +281,14 @@ class EventControllerAuthorizationIntegrationTest {
         Booking confirmedBooking = createBooking(confirmedUser, event, BookingStatus.CONFIRMED);
         Booking alreadyCancelledBooking = createBooking(cancelledUser, event, BookingStatus.CANCELLED);
 
-        MockHttpSession attendeeSession = login(attendeeEmail, password);
+        String attendeeToken = login(attendeeEmail, password);
         mockMvc.perform(patch("/api/events/{id}/cancel", event.getId())
-                        .session(attendeeSession))
+                        .header("Authorization", bearerToken(attendeeToken)))
                 .andExpect(status().isForbidden());
 
-        MockHttpSession adminSession = login(adminEmail, password);
+        String adminToken = login(adminEmail, password);
         mockMvc.perform(patch("/api/events/{id}/cancel", event.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.availableSpots").value(event.getCapacity()))
@@ -297,13 +296,13 @@ class EventControllerAuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.cancelledConfirmedCount").value(1));
 
         mockMvc.perform(post("/api/bookings")
-                        .session(attendeeSession)
+                        .header("Authorization", bearerToken(attendeeToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bookingJson(event.getId())))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(patch("/api/events/{id}/cancel", event.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isConflict());
 
         Booking pendingAfter = bookingRepository.findById(pendingBooking.getId()).orElseThrow();
@@ -373,28 +372,28 @@ class EventControllerAuthorizationIntegrationTest {
         cancelledEvent.setCancelledAt(LocalDateTime.now());
         cancelledEvent = eventRepository.save(cancelledEvent);
 
-        MockHttpSession attendeeSession = login(attendeeEmail, password);
+        String attendeeToken = login(attendeeEmail, password);
         mockMvc.perform(patch("/api/events/{id}/open", comingSoonEvent.getId())
-                        .session(attendeeSession))
+                        .header("Authorization", bearerToken(attendeeToken)))
                 .andExpect(status().isForbidden());
 
-        MockHttpSession adminSession = login(adminEmail, password);
+        String adminToken = login(adminEmail, password);
         mockMvc.perform(patch("/api/events/{id}/open", comingSoonEvent.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("OPEN"));
 
         mockMvc.perform(patch("/api/events/{id}/open", closedEvent.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("OPEN"));
 
         mockMvc.perform(patch("/api/events/{id}/open", openEvent.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(patch("/api/events/{id}/open", cancelledEvent.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isConflict());
     }
 
@@ -450,14 +449,14 @@ class EventControllerAuthorizationIntegrationTest {
         cancelledEvent.setCancelledAt(LocalDateTime.now());
         cancelledEvent = eventRepository.save(cancelledEvent);
 
-        MockHttpSession attendeeSession = login(attendeeEmail, password);
+        String attendeeToken = login(attendeeEmail, password);
         mockMvc.perform(patch("/api/events/{id}/close", openEvent.getId())
-                        .session(attendeeSession))
+                        .header("Authorization", bearerToken(attendeeToken)))
                 .andExpect(status().isForbidden());
 
-        MockHttpSession adminSession = login(adminEmail, password);
+        String adminToken = login(adminEmail, password);
         mockMvc.perform(patch("/api/events/{id}/close", openEvent.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CLOSED"))
                 .andExpect(jsonPath("$.bookedCount").value(1));
@@ -475,21 +474,21 @@ class EventControllerAuthorizationIntegrationTest {
         assertEquals(BookingStatus.CANCELLED, cancelledAfter.getStatus());
 
         mockMvc.perform(post("/api/bookings")
-                        .session(attendeeSession)
+                        .header("Authorization", bearerToken(attendeeToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bookingJson(openEvent.getId())))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(patch("/api/events/{id}/close", openEvent.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(patch("/api/events/{id}/close", comingSoonEvent.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(patch("/api/events/{id}/close", cancelledEvent.getId())
-                        .session(adminSession))
+                        .header("Authorization", bearerToken(adminToken)))
                 .andExpect(status().isConflict());
     }
 
@@ -501,14 +500,23 @@ class EventControllerAuthorizationIntegrationTest {
         userRepository.save(new User("Admin", "User", email, passwordEncoder.encode(password), Role.ADMIN, true));
     }
 
-    private MockHttpSession login(String email, String password) throws Exception {
+    private String login(String email, String password) throws Exception {
         MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginJson(email, password)))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        return (MockHttpSession) loginResult.getRequest().getSession(false);
+        return readToken(loginResult);
+    }
+
+    private String readToken(MvcResult result) throws Exception {
+        String body = result.getResponse().getContentAsString();
+        return body.replaceAll("(?s).*\"token\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+    }
+
+    private String bearerToken(String token) {
+        return "Bearer " + token;
     }
 
     private String loginJson(String email, String password) {

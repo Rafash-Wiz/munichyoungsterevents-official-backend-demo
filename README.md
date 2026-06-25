@@ -13,7 +13,7 @@ This app lets the platform:
 ## Features
 
 - Public event APIs with support for open, coming soon, closed, and cancelled event states
-- Session-based authentication with register, login, logout, and current-user lookup
+- JWT-based authentication with register, login, logout, and current-user lookup
 - Role-based authorization for attendee and admin access
 - Core booking flow with booking creation, confirmation, cancellation, and pending booking lookup
 - Attendee self-service endpoints for paginated personal bookings
@@ -56,17 +56,23 @@ Key design choices:
 - service-layer business rules
 - repository-driven persistence with JPA
 - explicit lifecycle endpoints for event state transitions
-- session-based authentication instead of JWT
+- stateless JWT authentication with bearer-token authorization
 
 ## Authentication & Authorization
 
-Authentication is session-based.
+Authentication is JWT-based.
 
 Current auth flow includes:
 - register
 - login
 - logout
 - current authenticated user lookup via `/api/auth/me`
+
+Current JWT behavior:
+- `POST /api/auth/login` returns an access token
+- protected routes expect `Authorization: Bearer <token>`
+- `/api/auth/me` resolves the current user from the JWT-authenticated security context
+- current logout is client-side oriented and does not yet revoke tokens server-side
 
 Authorization is role-based:
 - `ATTENDEE`
@@ -226,8 +232,9 @@ Tests run against the separate test database profile.
 
 ## Project Notes
 
-- Authentication is session-based, not JWT-based.
+- Authentication is JWT-based and the backend is stateless.
 - Business rules are enforced in the service layer, not trusted to the frontend.
 - Event status transitions use dedicated lifecycle endpoints instead of free-form status updates.
 - Pagination and filtering were designed to support both admin dashboard and attendee dashboard flows.
 - Booking and event lifecycle behavior is modeled explicitly to support future payment integration cleanly.
+- Refresh tokens and server-side token revocation are planned as future production-hardening steps.

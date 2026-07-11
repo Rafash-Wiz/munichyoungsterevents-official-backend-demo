@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
+//test git comment
 public class MunichyoungstereventsApplication {
 
 	public static void main(String[] args) {
